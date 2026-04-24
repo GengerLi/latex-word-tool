@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LaTeX 公式转 Word 可编辑公式</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+  <style>
+    :root {
+      --bg-1: #f8fafc;
+      --bg-2: #eef2ff;
+      --card: rgba(255, 255, 255, 0.92);
+      --border: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --danger: #dc2626;
+      --success: #16a34a;
+      --warning: #d97706;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(59, 130, 246, 0.16), transparent 32rem),
+        linear-gradient(135deg, var(--bg-1), var(--bg-2));
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    .shell { max-width: 1200px; margin: 0 auto; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid rgba(229, 231, 235, 0.9);
+      border-radius: 1.25rem;
+      box-shadow: 0 16px 38px rgba(15, 23, 42, 0.08);
+      backdrop-filter: blur(12px);
+    }
+
+    .card-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.85rem;
+      font-weight: 750;
+      letter-spacing: -0.01em;
+    }
+
+    .input, .textarea, .select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 0.9rem;
+      background: white;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+    }
+
+    .input, .select { padding: 0.72rem 0.85rem; }
+
+    .textarea {
+      min-height: 180px;
+      padding: 0.85rem;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      line-height: 1.6;
+      font-size: 0.95rem;
+    }
+
+    .input:focus, .textarea:focus, .select:focus {
+      border-color: rgba(37, 99, 235, 0.75);
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      border-radius: 0.85rem;
+      border: 1px solid transparent;
+      padding: 0.62rem 0.9rem;
+      font-weight: 700;
+      font-size: 0.9rem;
+      line-height: 1.2;
+      transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    .btn:hover { transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+    .btn-primary { background: var(--primary); color: white; box-shadow: 0 10px 22px rgba(37, 99, 235, 0.22); }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-secondary { background: white; color: #374151; border-color: var(--border); }
+    .btn-secondary:hover { background: #f9fafb; }
+    .btn-danger { background: #fef2f2; color: var(--danger); border-color: #fecaca; }
+    .btn-danger:hover { background: #fee2e2; }
+    .btn-success { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+    .btn-warning { background: #fffbeb; color: #92400e; border-color: #fde68a; }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 0.22rem 0.65rem;
+      font-size: 0.78rem;
+      font-weight: 750;
+      border: 1px solid var(--border);
+      background: #f9fafb;
+      color: #4b5563;
+    }
+
+    .hint { color: var(--muted); font-size: 0.9rem; line-height: 1.65; }
+
+    .drop-zone {
+      border: 2px dashed #cbd5e1;
+      border-radius: 1.1rem;
+      background: rgba(248, 250, 252, 0.9);
+      min-height: 150px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 1.2rem;
+      transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+      cursor: pointer;
+    }
+
+    .drop-zone.dragover {
+      border-color: var(--primary);
+      background: rgba(219, 234, 254, 0.85);
+      transform: translateY(-1px);
+    }
+
+    .preview-card {
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      background: white;
+      padding: 1rem;
+      overflow-x: auto;
+    }
+
+    .katex-display { margin: 0.6rem 0; overflow-x: auto; overflow-y: hidden; }
+
+    .history-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 0.9rem;
+      background: white;
+      padding: 0.7rem 0.75rem;
+    }
+
+    .history-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      cursor: pointer;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 0.85rem;
+      line-height: 1.45;
+    }
+
+    #toastContainer {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      pointer-events: none;
+    }
+
+    .toast {
+      width: min(390px, calc(100vw - 2rem));
+      border-radius: 1rem;
+      padding: 0.85rem 1rem;
+      color: white;
+      box-shadow: 0 16px 34px rgba(15, 23, 42, 0.18);
+      opacity: 0;
+      transform: translateY(-8px) scale(0.98);
+      animation: toastIn 0.18s ease forwards;
+      pointer-events: auto;
+      font-weight: 650;
+      line-height: 1.45;
+    }
+
+    .toast.success { background: #16a34a; }
+    .toast.error { background: #dc2626; }
+    .toast.warning { background: #d97706; }
+    .toast.info { background: #2563eb; }
+
+    @keyframes toastIn { to { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes toastOut { to { opacity: 0; transform: translateY(-8px) scale(0.98); } }
+
+    .doc-preview {
+      width: min(100%, 370px);
+      aspect-ratio: 11906 / 16838;
+      margin: 0 auto;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 0.4rem;
+      box-shadow: 0 20px 35px rgba(15, 23, 42, 0.12);
+      position: relative;
+    }
+
+    .doc-preview .formula-placeholder {
+      position: absolute;
+      top: 9.8%;
+      left: 15%;
+      right: 15%;
+      text-align: center;
+      color: #111827;
+      font-family: "Cambria Math", "Times New Roman", serif;
+      font-size: clamp(0.9rem, 2.2vw, 1.1rem);
+      border-bottom: 1px dashed #cbd5e1;
+      padding-bottom: 0.35rem;
+    }
+
+    .code-inline {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      background: #f3f4f6;
+      padding: 0.08rem 0.32rem;
+      border-radius: 0.35rem;
+    }
+
+    @media (max-width: 768px) {
+      .btn { width: 100%; }
+      #toastContainer { left: 1rem; right: 1rem; }
+      .toast { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div id="toastContainer" aria-live="polite" aria-atomic="true"></div>
+
+  <main class="shell px-4 py-8 md:py-10">
+    <header class="mb-8 text-center">
+      <div class="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-white/70 px-4 py-2 text-sm font-bold text-blue-700 shadow-sm">
+        本地单文件工具 · 无后端 · 无数据库
+      </div>
+      <h1 class="mt-5 text-3xl font-black tracking-tight text-slate-950 md:text-5xl">LaTeX 公式转 Word 可编辑公式</h1>
+      <p class="mx-auto mt-4 max-w-3xl text-base leading-8 text-slate-600 md:text-lg">输入 LaTeX 或上传公式图片，一键生成 Word 中可编辑的数学公式。</p>
+      <p class="mx-auto mt-2 max-w-3xl text-sm leading-7 text-slate-500">所有逻辑都在浏览器中运行；导出的 Word 文件仅包含居中的 OMML 数学公式，不包含标题、源码、说明文字或图片。</p>
+    </header>
+
+    <section class="grid grid-cols-1 gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+      <div class="space-y-5">
+        <section class="card p-5">
+          <div class="card-title">
+            <h2 class="text-lg">API Key 设置</h2>
+            <span id="apiKeyStatus" class="pill">未设置 API Key</span>
+          </div>
+          <div class="grid gap-3 md:grid-cols-[1fr_auto]">
+            <input id="apiKeyInput" class="input" type="password" autocomplete="off" placeholder="请输入千问 Qwen API Key" />
+            <button id="toggleApiKeyBtn" class="btn btn-secondary" type="button">显示</button>
+          </div>
+          <div class="mt-3 flex flex-col gap-2 sm:flex-row">
+            <button id="saveApiKeyBtn" class="btn btn-primary" type="button">保存到本地</button>
+            <button id="clearApiKeyBtn" class="btn btn-danger" type="button">清除本地 Key</button>
+          </div>
+          <p class="hint mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-900">API Key 仅保存在当前浏览器的 localStorage 中，不会上传到你自己的服务器。请不要在公共电脑上保存 API Key。本页面是个人本地工具，不建议直接部署为公开网站。</p>
+        </section>
+
+        <section class="card p-5">
+          <div class="card-title">
+            <h2 class="text-lg">LaTeX 输入区</h2>
+            <span id="formulaCount" class="pill">0 条公式</span>
+          </div>
+          <textarea id="latexInput" class="textarea" spellcheck="false" placeholder="每行输入一个 LaTeX 公式，例如：x=\frac{-b\pm\sqrt{b^2-4ac}}{2a}"></textarea>
+          <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <button id="copyLatexBtn" class="btn btn-secondary" type="button">复制 LaTeX</button>
+            <button id="clearLatexBtn" class="btn btn-danger" type="button">清空</button>
+            <button id="saveHistoryBtn" class="btn btn-success" type="button">保存到历史记录</button>
+          </div>
+          <p class="hint mt-3">支持单个公式、多个公式每行一个，也支持 <span class="code-inline">cases</span>、<span class="code-inline">bmatrix</span> 等环境跨行输入。</p>
+        </section>
+
+        <section class="card p-5">
+          <div class="card-title">
+            <h2 class="text-lg">图片上传识别区</h2>
+            <span class="pill">png / jpg / jpeg / webp · 5MB 内</span>
+          </div>
+          <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="点击或拖拽上传图片">
+            <div>
+              <div class="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-blue-100 text-2xl text-blue-700">＋</div>
+              <p class="font-bold text-slate-800">点击上传，或将公式图片拖拽到这里</p>
+              <p class="mt-1 text-sm text-slate-500">图片上传后不会自动识别，请点击识别按钮</p>
+            </div>
+            <input id="imageInput" type="file" accept="image/png,image/jpeg,image/jpg,image/webp" class="hidden" />
+          </div>
+          <div id="imagePreviewWrap" class="mt-4 hidden">
+            <img id="imagePreview" alt="公式图片预览" class="max-h-72 w-full rounded-xl border border-slate-200 object-contain bg-white p-2" />
+            <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <button id="recognizeBtn" class="btn btn-primary" type="button">识别图片公式</button>
+              <button id="copyRecognizedBtn" class="btn btn-secondary" type="button">复制识别结果</button>
+              <button id="removeImageBtn" class="btn btn-danger" type="button">移除图片</button>
+            </div>
+            <pre id="recognizedOutput" class="mt-3 hidden overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700"></pre>
+          </div>
+        </section>
+
+        <section class="card p-5">
+          <div class="card-title">
+            <h2 class="text-lg">历史记录</h2>
+            <button id="clearHistoryBtn" class="btn btn-danger !py-2" type="button">清空历史记录</button>
+          </div>
+          <div id="historyList" class="space-y-2"></div>
+        </section>
+      </div>
+
+      <div class="space-y-5">
+        <section class="card p-5">
+          <div class="card-title">
+            <h2 class="text-lg">公式预览</h2>
+            <button id="copyAllPreviewBtn" class="btn btn-secondary !py-2" type="button">复制全部 LaTeX</button>
+          </div>
+          <div id="previewArea" class="space-y-3"></div>
+        </section>
+
+        <section class="card p-5">
+          <div class="card-title">
+            <h2 class="text-lg">Word 导出设置</h2>
+            <span class="pill">OMML 可编辑公式</span>
+          </div>
+          <label class="mb-2 block text-sm font-bold text-slate-700" for="fileNameInput">Word 文件名</label>
+          <input id="fileNameInput" class="input" value="latex-formula.docx" />
+          <label class="mt-4 flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-sm font-semibold text-slate-700">
+            <input id="pageBreakInput" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+            每个公式单独一页
+          </label>
+          <button id="exportWordBtn" class="btn btn-primary mt-4 w-full" type="button">导出 Word</button>
+        </section>
+
+        <section class="card p-5">
+          <div class="card-title">
+            <h2 class="text-lg">使用提示</h2>
+          </div>
+          <ul class="hint list-disc space-y-2 pl-5">
+            <li>导出前建议先查看 KaTeX 预览，确认公式主体无明显语法问题。</li>
+            <li>浏览器直接调用千问接口可能受网络、CORS 或浏览器安全策略影响；失败时请检查 API Key、网络状态和图片清晰度。</li>
+            <li>复杂矩阵、对齐环境会尽量降级为 Word 公式区域中的可编辑文本，确保文件可以打开且内容不丢失。</li>
+          </ul>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const QWEN_API_ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
+    const QWEN_MODEL = "qwen-vl-plus";
+    const API_KEY_STORAGE_KEY = "qwen_api_key";
+    const HISTORY_STORAGE_KEY = "formula_history";
+    const DEFAULT_FORMULA = "x=\\frac{-b\\pm\\sqrt{b^2-4ac}}{2a}";
+    const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+    const SUPPORTED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp"]);
+
+    const state = {
+      selectedImage: null,
+      recognizedLatex: ""
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    const els = {
+      apiKeyInput: $("apiKeyInput"),
+      apiKeyStatus: $("apiKeyStatus"),
+      toggleApiKeyBtn: $("toggleApiKeyBtn"),
+      saveApiKeyBtn: $("saveApiKeyBtn"),
+      clearApiKeyBtn: $("clearApiKeyBtn"),
+      latexInput: $("latexInput"),
+      formulaCount: $("formulaCount"),
+      copyLatexBtn: $("copyLatexBtn"),
+      clearLatexBtn: $("clearLatexBtn"),
+      saveHistoryBtn: $("saveHistoryBtn"),
+      previewArea: $("previewArea"),
+      copyAllPreviewBtn: $("copyAllPreviewBtn"),
+      dropZone: $("dropZone"),
+      imageInput: $("imageInput"),
+      imagePreviewWrap: $("imagePreviewWrap"),
+      imagePreview: $("imagePreview"),
+      recognizeBtn: $("recognizeBtn"),
+      copyRecognizedBtn: $("copyRecognizedBtn"),
+      removeImageBtn: $("removeImageBtn"),
+      recognizedOutput: $("recognizedOutput"),
+      historyList: $("historyList"),
+      clearHistoryBtn: $("clearHistoryBtn"),
+      fileNameInput: $("fileNameInput"),
+      pageBreakInput: $("pageBreakInput"),
+      exportWordBtn: $("exportWordBtn")
+    };
+
+    function showToast(message, type = "info", duration = 3000) {
+      const container = $("toastContainer");
+      const toast = document.createElement("div");
+      toast.className = `toast ${type}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+      window.setTimeout(() => {
+        toast.style.animation = "toastOut 0.18s ease forwards";
+        toast.addEventListener("animationend", () => toast.remove(), { once: true });
+      }, duration);
+    }
+
+    function isLocalStorageAvailable() {
+      try {
+        const key = "__latex_word_test__";
+        window.localStorage.setItem(key, "1");
+        window.localStorage.removeItem(key);
+        return true;
+      } catch (error) {
+        return false;
+      }
+    }
+
+    function safeLocalStorageGet(key, fallback = null) {
+      try {
+        return window.localStorage.getItem(key) ?? fallback;
+      } catch (error) {
+        return fallback;
+      }
+    }
+
+    function safeLocalStorageSet(key, value) {
+      try {
+        window.localStorage.setItem(key, value);
+        return true;
+      } catch (error) {
+        return false;
+      }
+    }
+
+    function safeLocalStorageRemove(key) {
+      try {
+        window.localStorage.removeItem(key);
+        return true;
+      } catch (error) {
+        return false;
+      }
+    }
+
+    function saveApiKey(apiKey) {
+      return safeLocalStorageSet(API_KEY_STORAGE_KEY, apiKey);
+    }
+
+    function getApiKey() {
+      return safeLocalStorageGet(API_KEY_STORAGE_KEY, "") || "";
+    }
+
+    function clearApiKey() {
+      return safeLocalStorageRemove(API_KEY_STORAGE_KEY);
+    }
+
+    function getHistory() {
+      const raw = safeLocalStorageGet(HISTORY_STORAGE_KEY, "[]");
+      try {
+        const parsed = JSON.parse(raw || "[]");
+        return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+      } catch (error) {
+        return [];
+      }
+    }
+
+    function saveHistory(formula) {
+      const value = String(formula || "").trim();
+      if (!value) return false;
+      const history = getHistory().filter((item) => item !== value);
+      history.unshift(value);
+      const clipped = history.slice(0, 20);
+      return safeLocalStorageSet(HISTORY_STORAGE_KEY, JSON.stringify(clipped));
+    }
+
+    function removeHistoryItem(index) {
+      const history = getHistory();
+      history.splice(index, 1);
+      return safeLocalStorageSet(HISTORY_STORAGE_KEY, JSON.stringify(history));
+    }
+
+    function clearHistory() {
+      return safeLocalStorageRemove(HISTORY_STORAGE_KEY);
+    }
+
+    function escapeXml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&apos;");
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    async function copyText(text, successMessage = "已复制") {
+      const value = String(text || "");
+      if (!value.trim()) {
+        showToast("没有可复制的内容", "warning");
+        return false;
+      }
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(value);
+        } else {
+          const textarea = document.createElement("textarea");
+          textarea.value = value;
+          textarea.style.position = "fixed";
+          textarea.style.left = "-9999px";
+          document.body.appendChild(textarea);
+          textarea.focus();
+          textarea.select();
+          const ok = document.execCommand("copy");
+          textarea.remove();
+          if (!ok) throw new Error("复制命令不可用");
+        }
+        showToast(successMessage, "success");
+        return true;
+      } catch (error) {
+        showToast("复制失败，请手动选择文本复制", "error");
+        return false;
+      }
+    }
+
+    function splitFormulas(text) {
+      const lines = String(text || "").split(/\r?\n/);
+      const formulas = [];
+      let buffer = [];
+      let envDepth = 0;
+
+      const beginCount = (line) => (line.match(/\\begin\s*\{/g) || []).length;
+      const endCount = (line) => (line.match(/\\end\s*\{/g) || []).length;
+
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line && buffer.length === 0) continue;
+        if (!line && buffer.length > 0 && envDepth <= 0) {
+          const formula = buffer.join("\n").trim();
+          if (formula) formulas.push(formula);
+          buffer = [];
+          continue;
+        }
+
+        buffer.push(rawLine);
+        envDepth += beginCount(rawLine);
+        envDepth -= endCount(rawLine);
+
+        if (envDepth <= 0) {
+          const formula = buffer.join("\n").trim();
+          if (formula) formulas.push(formula);
+          buffer = [];
+          envDepth = 0;
+        }
+      }
+
+      const tail = buffer.join("\n").trim();
+      if (tail) formulas.push(tail);
+      return formulas;
+    }
+
+    function appendFormula(latex) {
+      const current = els.latexInput.value.trimEnd();
+      els.latexInput.value = current ? `${current}\n${latex}` : latex;
+      els.latexInput.dispatchEvent(new Event("input"));
+      els.latexInput.focus();
+    }
+
+    function renderPreview() {
+      const formulas = splitFormulas(els.latexInput.value);
+      els.formulaCount.textContent = `${formulas.length} 条公式`;
+      els.previewArea.innerHTML = "";
+
+      if (!formulas.length) {
+        const empty = document.createElement("div");
+        empty.className = "rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-slate-500";
+        empty.textContent = "请先输入 LaTeX 公式或上传图片识别公式";
+        els.previewArea.appendChild(empty);
+        return;
+      }
+
+      formulas.forEach((formula, index) => {
+        const card = document.createElement("div");
+        card.className = "preview-card";
+
+        const header = document.createElement("div");
+        header.className = "mb-3 flex items-center justify-between gap-3";
+        header.innerHTML = `<span class="pill">公式 ${index + 1}</span>`;
+
+        const copyBtn = document.createElement("button");
+        copyBtn.className = "btn btn-secondary !py-2";
+        copyBtn.type = "button";
+        copyBtn.textContent = "复制本条 LaTeX";
+        copyBtn.addEventListener("click", () => copyText(formula, "本条 LaTeX 已复制"));
+        header.appendChild(copyBtn);
+
+        const formulaBox = document.createElement("div");
+        formulaBox.className = "min-h-12 text-center";
+
+        try {
+          if (!window.katex) throw new Error("KaTeX 尚未加载完成");
+          katex.render(formula, formulaBox, {
+            displayMode: true,
+            throwOnError: true,
+            strict: "ignore"
+          });
+        } catch (error) {
+          formulaBox.innerHTML = `<div class="rounded-lg border border-red-200 bg-red-50 p-3 text-left text-sm font-semibold text-red-700">LaTeX 语法可能有误，请检查公式格式</div><pre class="mt-3 overflow-x-auto rounded-lg bg-slate-50 p-3 text-left text-xs text-slate-600">${escapeHtml(formula)}</pre>`;
+        }
+
+        card.appendChild(header);
+        card.appendChild(formulaBox);
+        els.previewArea.appendChild(card);
+      });
+    }
+
+    function renderHistory() {
+      const history = getHistory();
+      els.historyList.innerHTML = "";
+      if (!history.length) {
+        const empty = document.createElement("div");
+        empty.className = "rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-slate-500";
+        empty.textContent = "暂无历史记录";
+        els.historyList.appendChild(empty);
+        return;
+      }
+
+      history.forEach((item, index) => {
+        const row = document.createElement("div");
+        row.className = "history-item";
+
+        const text = document.createElement("div");
+        text.className = "history-text";
+        text.title = item;
+        text.textContent = item.length > 80 ? `${item.slice(0, 80)}...` : item;
+        text.addEventListener("click", () => {
+          els.latexInput.value = item;
+          els.latexInput.dispatchEvent(new Event("input"));
+          showToast("已恢复到编辑器", "success");
+        });
+
+        const del = document.createElement("button");
+        del.className = "btn btn-danger !py-2";
+        del.type = "button";
+        del.textContent = "删除";
+        del.addEventListener("click", () => {
+          if (removeHistoryItem(index)) {
+            renderHistory();
+            showToast("历史记录已删除", "success");
+          } else {
+            showToast("删除失败，localStorage 可能不可用", "error");
+          }
+        });
+
+        row.appendChild(text);
+        row.appendChild(del);
+        els.historyList.appendChild(row);
+      });
+    }
+
+    function updateApiKeyStatus() {
+      const key = getApiKey();
+      if (key) {
+        els.apiKeyStatus.textContent = "已加载本地 API Key";
+        els.apiKeyStatus.className = "pill border-green-200 bg-green-50 text-green-700";
+      } else {
+        els.apiKeyStatus.textContent = "未设置 API Key";
+        els.apiKeyStatus.className = "pill";
+      }
+    }
+
+    function validateImageFile(file) {
+      if (!file) throw new Error("图片为空");
+      if (!SUPPORTED_IMAGE_TYPES.has(file.type)) throw new Error("图片格式不支持，请上传 png、jpg、jpeg 或 webp");
+      if (file.size > MAX_IMAGE_SIZE) throw new Error("图片超过 5MB，请压缩后再上传");
+    }
+
+    function fileToDataURL(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(new Error("读取图片失败"));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function handleImageFile(file) {
+      try {
+        validateImageFile(file);
+        const dataUrl = await fileToDataURL(file);
+        const base64 = dataUrl.split(",")[1] || "";
+        state.selectedImage = { file, dataUrl, base64, mimeType: file.type || "image/png" };
+        state.recognizedLatex = "";
+        els.imagePreview.src = dataUrl;
+        els.imagePreviewWrap.classList.remove("hidden");
+        els.recognizedOutput.classList.add("hidden");
+        els.recognizedOutput.textContent = "";
+        showToast("图片已加载，请点击识别图片公式", "success");
+      } catch (error) {
+        showToast(error.message || "图片处理失败", "error");
+      }
+    }
+
+    function removeImage() {
+      state.selectedImage = null;
+      state.recognizedLatex = "";
+      els.imageInput.value = "";
+      els.imagePreview.src = "";
+      els.imagePreviewWrap.classList.add("hidden");
+      els.recognizedOutput.classList.add("hidden");
+      els.recognizedOutput.textContent = "";
+      showToast("图片已移除", "info");
+    }
+
+    function cleanRecognizedLatex(raw) {
+      let text = String(raw || "").trim();
+      text = text.replace(/^```(?:latex|tex)?\s*/i, "").replace(/```$/g, "").trim();
+      text = text.replace(/^`+|`+$/g, "").trim();
+      text = text.replace(/^\s*(?:LaTeX|Latex|latex|公式|结果|识别结果)\s*[:：]\s*/i, "").trim();
+
+      const lines = text.split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => line
+          .replace(/^[-*]\s+/, "")
+          .replace(/^\$\$?/, "")
+          .replace(/\$\$?$/, "")
+          .replace(/^\\\(/, "")
+          .replace(/\\\)$/, "")
+          .replace(/^\\\[/, "")
+          .replace(/\\\]$/, "")
+          .trim()
+        )
+        .filter((line) => !/^(以下|这是|识别|转换|答案|说明)/.test(line));
+
+      return lines.join("\n").trim();
+    }
+
+    async function recognizeFormulaFromImage(apiKey, imageBase64, mimeType) {
+      const prompt = "请识别图片中的数学公式，并将其转换为标准 LaTeX 格式。只返回 LaTeX 代码，不要添加任何解释、Markdown 代码块或多余文字。如果图片中有多个公式，请每行返回一个公式。";
+      const response = await fetch(QWEN_API_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: QWEN_MODEL,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: prompt },
+                { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } }
+              ]
+            }
+          ],
+          temperature: 0
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        throw new Error(errorText || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data?.choices?.[0]?.message?.content;
+      const latex = cleanRecognizedLatex(Array.isArray(content) ? content.map((part) => part.text || "").join("\n") : content);
+      if (!latex) throw new Error("千问返回空内容");
+      return { latex, confidence: null };
+    }
+
+    async function runRecognition() {
+      const typedKey = els.apiKeyInput.value.trim();
+      const apiKey = typedKey || getApiKey();
+      if (!apiKey) {
+        showToast("请先填写并保存千问 API Key", "warning");
+        return;
+      }
+      if (!state.selectedImage) {
+        showToast("请先上传图片", "warning");
+        return;
+      }
+
+      const originalText = els.recognizeBtn.textContent;
+      els.recognizeBtn.disabled = true;
+      els.recognizeBtn.textContent = "正在识别公式...";
+
+      try {
+        const result = await recognizeFormulaFromImage(apiKey, state.selectedImage.base64, state.selectedImage.mimeType);
+        state.recognizedLatex = result.latex;
+        els.recognizedOutput.textContent = result.latex;
+        els.recognizedOutput.classList.remove("hidden");
+        appendFormula(result.latex);
+        showToast("识别成功，已填入 LaTeX 编辑器", "success");
+      } catch (error) {
+        console.error(error);
+        showToast("识别失败，请检查图片清晰度、API Key 或网络状态", "error", 4200);
+      } finally {
+        els.recognizeBtn.disabled = false;
+        els.recognizeBtn.textContent = originalText;
+      }
+    }
+
+    const GREEK = {
+      alpha: "α", beta: "β", gamma: "γ", delta: "δ", epsilon: "ε", varepsilon: "ε",
+      zeta: "ζ", eta: "η", theta: "θ", vartheta: "ϑ", iota: "ι", kappa: "κ",
+      lambda: "λ", mu: "μ", nu: "ν", xi: "ξ", pi: "π", rho: "ρ", sigma: "σ",
+      tau: "τ", upsilon: "υ", phi: "φ", varphi: "φ", chi: "χ", psi: "ψ", omega: "ω",
+      Gamma: "Γ", Delta: "Δ", Theta: "Θ", Lambda: "Λ", Xi: "Ξ", Pi: "Π", Sigma: "Σ",
+      Phi: "Φ", Psi: "Ψ", Omega: "Ω"
+    };
+
+    const COMMAND_TEXT = {
+      pm: "±", mp: "∓", times: "×", cdot: "·", div: "÷", ast: "∗",
+      le: "≤", leq: "≤", ge: "≥", geq: "≥", neq: "≠", ne: "≠", approx: "≈",
+      sim: "∼", infty: "∞", to: "→",rightarrow: "→", leftarrow: "←", mapsto: "↦",
+      in: "∈", notin: "∉", subset: "⊂", subseteq: "⊆", superset: "⊃", superseteq: "⊇",
+      cup: "∪", cap: "∩", emptyset: "∅", partial: "∂", nabla: "∇", angle: "∠",
+      degree: "°", circ: "∘", propto: "∝", forall: "∀", exists: "∃",
+      int: "∫", iint: "∬", iiint: "∭", oint: "∮", sum: "∑", prod: "∏",
+      lim: "lim", sin: "sin", cos: "cos", tan: "tan", cot: "cot", sec: "sec", csc: "csc",
+      log: "log", ln: "ln", exp: "exp", min: "min", max: "max", sup: "sup", inf: "inf",
+      det: "det", dim: "dim", mod: "mod", bmod: "mod", quad: " ", qquad: " ", ",": " ", ";": " ", ":": " ", "!": ""
+    };
+
+    function mathRun(text) {
+      const value = String(text ?? "");
+      if (!value) return "";
+      const preserve = /^\s|\s$|\s{2,}/.test(value) ? ' xml:space="preserve"' : "";
+      return `<m:r><m:rPr/><w:rPr><w:rFonts w:ascii="Cambria Math" w:hAnsi="Cambria Math"/><w:lang w:val="en-US"/></w:rPr><m:t${preserve}>${escapeXml(value)}</m:t></m:r>`;
+    }
+
+    function mathCtrlPr() {
+      return `<m:ctrlPr><w:rPr><w:rFonts w:ascii="Cambria Math" w:hAnsi="Cambria Math"/><w:i/><w:lang w:val="en-US"/></w:rPr></m:ctrlPr>`;
+    }
+
+    function normalizeMathText(text) {
+      return String(text || "")
+        .replace(/-/g, "−")
+        .replace(/\*/g, "∗");
+    }
+
+    function textNode(text) {
+      return { type: "text", text: normalizeMathText(text) };
+    }
+
+    function seqNode(children) {
+      return { type: "seq", children: Array.isArray(children) ? children : [] };
+    }
+
+    function nodesToOmml(nodes) {
+      return (Array.isArray(nodes) ? nodes : [nodes]).map(nodeToOmml).join("") || mathRun(" ");
+    }
+
+    function nodeToOmml(node) {
+      if (!node) return "";
+      switch (node.type) {
+        case "text":
+          return mathRun(node.text);
+        case "seq":
+          return nodesToOmml(node.children);
+        case "frac":
+          return `<m:f><m:fPr>${mathCtrlPr()}</m:fPr><m:num>${nodesToOmml(node.num)}</m:num><m:den>${nodesToOmml(node.den)}</m:den></m:f>`;
+        case "sqrt":
+          return `<m:rad><m:radPr><m:degHide m:val="1"/>${mathCtrlPr()}</m:radPr><m:deg/><m:e>${nodesToOmml(node.body)}</m:e></m:rad>`;
+        case "sup":
+          return `<m:sSup><m:e>${nodeToOmml(node.base)}</m:e><m:sup>${nodesToOmml(node.sup)}</m:sup></m:sSup>`;
+        case "sub":
+          return `<m:sSub><m:e>${nodeToOmml(node.base)}</m:e><m:sub>${nodesToOmml(node.sub)}</m:sub></m:sSub>`;
+        case "subsup":
+          return `<m:sSubSup><m:e>${nodeToOmml(node.base)}</m:e><m:sub>${nodesToOmml(node.sub)}</m:sub><m:sup>${nodesToOmml(node.sup)}</m:sup></m:sSubSup>`;
+        default:
+          return mathRun(node.text || "");
+      }
+    }
+
+    class LatexParser {
+      constructor(input) {
+        this.s = String(input || "")
+          .replace(/^\s*\$\$?/, "")
+          .replace(/\$\$?\s*$/, "")
+          .trim();
+        this.i = 0;
+      }
+
+      eof() { return this.i >= this.s.length; }
+      peek() { return this.s[this.i]; }
+      next() { return this.s[this.i++]; }
+      startsWith(value) { return this.s.slice(this.i, this.i + value.length) === value; }
+      skipSpaces() { while (!this.eof() && /\s/.test(this.peek())) this.i++; }
+
+      parse() {
+        return this.parseExpression();
+      }
+
+      parseExpression() {
+        const nodes = [];
+        while (!this.eof()) {
+          if (this.peek() === "}") break;
+          if (this.startsWith("\\right") || this.startsWith("\\end")) break;
+          const atom = this.parseAtom();
+          if (!atom) break;
+          nodes.push(this.parseScripts(atom));
+        }
+        return nodes;
+      }
+
+      parseAtom() {
+        if (this.eof()) return null;
+        const ch = this.peek();
+
+        if (ch === "{") {
+          this.next();
+          const children = this.parseExpression();
+          if (this.peek() === "}") this.next();
+          return seqNode(children);
+        }
+
+        if (ch === "}") return null;
+
+        if (ch === "^") {
+          this.next();
+          return textNode("^");
+        }
+
+        if (ch === "_") {
+          this.next();
+          return textNode("_");
+        }
+
+        if (ch === "\\") {
+          return this.parseCommandAtom();
+        }
+
+        if (/\s/.test(ch)) {
+          while (!this.eof() && /\s/.test(this.peek())) this.next();
+          return textNode(" ");
+        }
+
+        let text = "";
+        while (!this.eof()) {
+          const c = this.peek();
+          if (c === "\\" || c === "{" || c === "}" || c === "^" || c === "_" || /\s/.test(c)) break;
+          text += this.next();
+        }
+        return textNode(text);
+      }
+
+      parseCommandAtom() {
+        this.next();
+        const cmd = this.readCommandName();
+
+        if (cmd === "frac") {
+          const num = this.parseRequiredGroup();
+          const den = this.parseRequiredGroup();
+          return { type: "frac", num, den };
+        }
+
+        if (cmd === "sqrt") {
+          this.skipOptionalBracket();
+          const body = this.parseRequiredGroup();
+          return { type: "sqrt", body };
+        }
+
+        if (cmd === "left") {
+          const open = this.readDelimiter();
+          const inner = this.parseExpression();
+          let close = "";
+          if (this.startsWith("\\right")) {
+            this.i += "\\right".length;
+            close = this.readDelimiter();
+          }
+          return seqNode([textNode(open), ...inner, textNode(close)]);
+        }
+
+        if (cmd === "right") {
+          return null;
+        }
+
+        if (cmd === "begin") {
+          const envName = this.readGroupRaw().trim();
+          return this.parseEnvironment(envName);
+        }
+
+        if (cmd === "mathrm" || cmd === "text" || cmd === "operatorname") {
+          const raw = this.readGroupRaw();
+          return textNode(raw);
+        }
+
+        if (cmd === "overline") {
+          const body = this.parseRequiredGroup();
+          return seqNode([textNode("¯("), ...body, textNode(")")]);
+        }
+
+        if (cmd === "underline") {
+          const body = this.parseRequiredGroup();
+          return seqNode([textNode("_"), ...body]);
+        }
+
+        if (cmd === "\\") {
+          return textNode("; ");
+        }
+
+        if (Object.prototype.hasOwnProperty.call(GREEK, cmd)) return textNode(GREEK[cmd]);
+        if (Object.prototype.hasOwnProperty.call(COMMAND_TEXT, cmd)) return textNode(COMMAND_TEXT[cmd]);
+
+        if (cmd.length === 1) return textNode(cmd);
+        return textNode(cmd);
+      }
+
+      readCommandName() {
+        if (this.eof()) return "";
+        let name = "";
+        while (!this.eof() && /[A-Za-z]/.test(this.peek())) {
+          name += this.next();
+        }
+        if (!name && !this.eof()) name = this.next();
+        return name;
+      }
+
+      parseScripts(base) {
+        let sub = null;
+        let sup = null;
+        let changed = true;
+        while (changed && !this.eof()) {
+          changed = false;
+          this.skipSpaces();
+          if (this.peek() === "^") {
+            this.next();
+            sup = this.parseScriptNodes();
+            changed = true;
+          }
+          this.skipSpaces();
+          if (this.peek() === "_") {
+            this.next();
+            sub = this.parseScriptNodes();
+            changed = true;
+          }
+        }
+
+        if (sub && sup) return { type: "subsup", base, sub, sup };
+        if (sup) return { type: "sup", base, sup };
+        if (sub) return { type: "sub", base, sub };
+        return base;
+      }
+
+      parseScriptNodes() {
+        this.skipSpaces();
+        if (this.peek() === "{") {
+          this.next();
+          const nodes = this.parseExpression();
+          if (this.peek() === "}") this.next();
+          return nodes;
+        }
+        const atom = this.parseAtom();
+        return atom ? [atom] : [textNode("")];
+      }
+
+      parseRequiredGroup() {
+        this.skipSpaces();
+        if (this.peek() === "{") {
+          this.next();
+          const nodes = this.parseExpression();
+          if (this.peek() === "}") this.next();
+          return nodes;
+        }
+        const atom = this.parseAtom();
+        return atom ? [atom] : [textNode("")];
+      }
+
+      readGroupRaw() {
+        this.skipSpaces();
+        if (this.peek() !== "{") return "";
+        this.next();
+        let depth = 1;
+        let raw = "";
+        while (!this.eof() && depth > 0) {
+          const ch = this.next();
+          if (ch === "{") depth++;
+          if (ch === "}") depth--;
+          if (depth > 0) raw += ch;
+        }
+        return raw;
+      }
+
+      skipOptionalBracket() {
+        this.skipSpaces();
+        if (this.peek() !== "[") return;
+        this.next();
+        let depth = 1;
+        while (!this.eof() && depth > 0) {
+          const ch = this.next();
+          if (ch === "[") depth++;
+          if (ch === "]") depth--;
+        }
+      }
+
+      readDelimiter() {
+        this.skipSpaces();
+        if (this.eof()) return "";
+        if (this.peek() === "\\") {
+          this.next();
+          const cmd = this.readCommandName();
+          return this.mapDelimiter(cmd);
+        }
+        return this.mapDelimiter(this.next());
+      }
+
+      mapDelimiter(value) {
+        const map = {
+          "(": "(", ")": ")", "[": "[", "]": "]", "\\{": "{", "\\}": "}",
+          "{": "{", "}": "}", "langle": "⟨", "rangle": "⟩", "vert": "|", "|": "‖", ".": ""
+        };
+        return map[value] ?? value;
+      }
+
+      parseEnvironment(envName) {
+        const marker = `\\end{${envName}}`;
+        const endIndex = this.s.indexOf(marker, this.i);
+        if (endIndex === -1) {
+          return textNode(`begin{${envName}}`);
+        }
+        const raw = this.s.slice(this.i, endIndex);
+        this.i = endIndex + marker.length;
+        const cleaned = raw
+          .replace(/\r?\n/g, " ")
+          .replace(/\\\\/g, "; ")
+          .replace(/&/g, "  ")
+          .replace(/\\/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+
+        if (envName === "bmatrix") return textNode(`[ ${cleaned} ]`);
+        if (envName === "pmatrix") return textNode(`( ${cleaned} )`);
+        if (envName === "cases") return textNode(`{ ${cleaned}`);
+        return textNode(cleaned);
+      }
+    }
+
+    function latexToOmml(latex) {
+      try {
+        const parser = new LatexParser(latex);
+        const nodes = parser.parse();
+        const omml = nodesToOmml(nodes);
+        return `<m:oMath>${omml}</m:oMath>`;
+      } catch (error) {
+        const fallback = String(latex || "").replace(/\s+/g, " ").trim();
+        return `<m:oMath>${mathRun(fallback || " ")}</m:oMath>`;
+      }
+    }
+
+    function buildDocumentXml(formulas, eachFormulaOnPage) {
+      const paragraphs = formulas.map((formula, index) => {
+        const pageBreak = eachFormulaOnPage && index < formulas.length - 1
+          ? `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`
+          : "";
+        return `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="240" w:line="360" w:lineRule="auto"/><w:rPr><w:rFonts w:ascii="Cambria Math" w:hAnsi="Cambria Math"/><w:sz w:val="24"/><w:lang w:val="en-US"/></w:rPr></w:pPr><m:oMathPara><m:oMathParaPr><m:jc m:val="center"/></m:oMathParaPr>${latexToOmml(formula)}</m:oMathPara></w:p>${pageBreak}`;
+      }).join("");
+
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" mc:Ignorable="w14 w15 wp14">
+  <w:body>
+    ${paragraphs}
+    <w:sectPr>
+      <w:pgSz w:w="11906" w:h="16838"/>
+      <w:pgMar w:top="1440" w:right="1800" w:bottom="1440" w:left="1800" w:header="851" w:footer="992" w:gutter="0"/>
+      <w:cols w:space="425" w:num="1"/>
+      <w:docGrid w:type="lines" w:linePitch="312" w:charSpace="0"/>
+    </w:sectPr>
+  </w:body>
+</w:document>`;
+    }
+
+    function contentTypesXml() {
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+  <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>
+  <Override PartName="/word/fontTable.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml"/>
+  <Override PartName="/word/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>
+  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+</Types>`;
+    }
+
+    function rootRelsXml() {
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>`;
+    }
+
+    function documentRelsXml() {
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable" Target="fontTable.xml"/>
+  <Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="theme/theme1.xml"/>
+</Relationships>`;
+    }
+
+    function coreXml() {
+      const now = new Date().toISOString();
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dc:title>LaTeX Formula</dc:title>
+  <dc:creator>Local LaTeX to Word Tool</dc:creator>
+  <cp:lastModifiedBy>Local LaTeX to Word Tool</cp:lastModifiedBy>
+  <dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created>
+  <dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified>
+</cp:coreProperties>`;
+    }
+
+    function appXml() {
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+  <Application>Local LaTeX to Word Tool</Application>
+  <DocSecurity>0</DocSecurity>
+  <ScaleCrop>false</ScaleCrop>
+  <Company></Company>
+  <LinksUpToDate>false</LinksUpToDate>
+  <SharedDoc>false</SharedDoc>
+  <HyperlinksChanged>false</HyperlinksChanged>
+  <AppVersion>16.0000</AppVersion>
+</Properties>`;
+    }
+
+    function stylesXml() {
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" mc:Ignorable="w14">
+  <w:docDefaults>
+    <w:rPrDefault>
+      <w:rPr>
+        <w:rFonts w:ascii="Cambria Math" w:hAnsi="Cambria Math" w:eastAsia="宋体"/>
+        <w:sz w:val="24"/>
+        <w:szCs w:val="24"/>
+        <w:lang w:val="en-US" w:eastAsia="zh-CN"/>
+      </w:rPr>
+    </w:rPrDefault>
+    <w:pPrDefault>
+      <w:pPr><w:spacing w:after="0" w:line="360" w:lineRule="auto"/></w:pPr>
+    </w:pPrDefault>
+  </w:docDefaults>
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+    <w:name w:val="Normal"/>
+    <w:qFormat/>
+    <w:pPr><w:jc w:val="center"/></w:pPr>
+    <w:rPr><w:rFonts w:ascii="Cambria Math" w:hAnsi="Cambria Math" w:eastAsia="宋体"/><w:sz w:val="24"/><w:lang w:val="en-US" w:eastAsia="zh-CN"/></w:rPr>
+  </w:style>
+</w:styles>`;
+    }
+
+    function settingsXml() {
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:settings xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" mc:Ignorable="w14">
+  <w:zoom w:percent="100"/>
+  <w:defaultTabStop w:val="420"/>
+  <w:characterSpacingControl w:val="compressPunctuation"/>
+  <w:compat>
+    <w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/>
+    <w:compatSetting w:name="overrideTableStyleFontSizeAndJustification" w:uri="http://schemas.microsoft.com/office/word" w:val="1"/>
+    <w:compatSetting w:name="enableOpenTypeFeatures" w:uri="http://schemas.microsoft.com/office/word" w:val="1"/>
+  </w:compat>
+  <m:mathPr>
+    <m:mathFont m:val="Cambria Math"/>
+    <m:brkBin m:val="before"/>
+    <m:brkBinSub m:val="--"/>
+    <m:smallFrac m:val="0"/>
+    <m:dispDef/>
+    <m:lMargin m:val="0"/>
+    <m:rMargin m:val="0"/>
+    <m:defJc m:val="centerGroup"/>
+    <m:wrapIndent m:val="1440"/>
+    <m:intLim m:val="subSup"/>
+    <m:naryLim m:val="undOvr"/>
+  </m:mathPr>
+</w:settings>`;
+    }
+
+    function fontTableXml() {
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:fonts xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" mc:Ignorable="w14">
+  <w:font w:name="Cambria Math"><w:panose1 w:val="02040503050406030204"/><w:charset w:val="00"/><w:family w:val="roman"/><w:pitch w:val="variable"/><w:sig w:usb0="E0002EFF" w:usb1="C0007843" w:usb2="00000009" w:usb3="00000000" w:csb0="400001FF" w:csb1="FFFF0000"/></w:font>
+  <w:font w:name="Times New Roman"><w:charset w:val="00"/><w:family w:val="roman"/><w:pitch w:val="variable"/></w:font>
+  <w:font w:name="宋体"><w:charset w:val="86"/><w:family w:val="auto"/><w:pitch w:val="default"/></w:font>
+</w:fonts>`;
+    }
+
+    function themeXml() {
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Office Theme">
+  <a:themeElements>
+    <a:clrScheme name="Office">
+      <a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1>
+      <a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1>
+      <a:dk2><a:srgbClr val="1F497D"/></a:dk2>
+      <a:lt2><a:srgbClr val="EEECE1"/></a:lt2>
+      <a:accent1><a:srgbClr val="4F81BD"/></a:accent1>
+      <a:accent2><a:srgbClr val="C0504D"/></a:accent2>
+      <a:accent3><a:srgbClr val="9BBB59"/></a:accent3>
+      <a:accent4><a:srgbClr val="8064A2"/></a:accent4>
+      <a:accent5><a:srgbClr val="4BACC6"/></a:accent5>
+      <a:accent6><a:srgbClr val="F79646"/></a:accent6>
+      <a:hlink><a:srgbClr val="0000FF"/></a:hlink>
+      <a:folHlink><a:srgbClr val="800080"/></a:folHlink>
+    </a:clrScheme>
+    <a:fontScheme name="Office">
+      <a:majorFont><a:latin typeface="Cambria"/><a:ea typeface="宋体"/><a:cs typeface="Times New Roman"/></a:majorFont>
+      <a:minorFont><a:latin typeface="Calibri"/><a:ea typeface="宋体"/><a:cs typeface="Times New Roman"/></a:minorFont>
+    </a:fontScheme>
+    <a:fmtScheme name="Office"><a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:fillStyleLst><a:lnStyleLst><a:ln w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="solid"/></a:ln></a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst><a:bgFillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:bgFillStyleLst></a:fmtScheme>
+  </a:themeElements>
+</a:theme>`;
+    }
+
+    async function exportDocx() {
+      const formulas = splitFormulas(els.latexInput.value).map((item) => item.trim()).filter(Boolean);
+      if (!formulas.length) {
+        showToast("请先输入或识别一个公式", "warning");
+        return;
+      }
+      if (!window.JSZip) {
+        showToast("JSZip 未加载，无法生成 Word 文件", "error");
+        return;
+      }
+
+      const originalText = els.exportWordBtn.textContent;
+      els.exportWordBtn.disabled = true;
+      els.exportWordBtn.textContent = "正在生成 Word...";
+
+      try {
+        const zip = new JSZip();
+        zip.file("[Content_Types].xml", contentTypesXml());
+        zip.folder("_rels").file(".rels", rootRelsXml());
+        zip.folder("docProps").file("core.xml", coreXml());
+        zip.folder("docProps").file("app.xml", appXml());
+
+        const word = zip.folder("word");
+        word.file("document.xml", buildDocumentXml(formulas, els.pageBreakInput.checked));
+        word.file("styles.xml", stylesXml());
+        word.file("settings.xml", settingsXml());
+        word.file("fontTable.xml", fontTableXml());
+        word.folder("theme").file("theme1.xml", themeXml());
+        word.folder("_rels").file("document.xml.rels", documentRelsXml());
+
+        const blob = await zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+        let fileName = (els.fileNameInput.value || "latex-formula.docx").trim();
+        if (!/\.docx$/i.test(fileName)) fileName += ".docx";
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        showToast("Word 文件已生成", "success");
+      } catch (error) {
+        console.error(error);
+        showToast("Word 生成失败，请检查公式格式", "error");
+      } finally {
+        els.exportWordBtn.disabled = false;
+        els.exportWordBtn.textContent = originalText;
+      }
+    }
+
+    function bindEvents() {
+      els.toggleApiKeyBtn.addEventListener("click", () => {
+        const isPassword = els.apiKeyInput.type === "password";
+        els.apiKeyInput.type = isPassword ? "text" : "password";
+        els.toggleApiKeyBtn.textContent = isPassword ? "隐藏" : "显示";
+      });
+
+      els.saveApiKeyBtn.addEventListener("click", () => {
+        const key = els.apiKeyInput.value.trim();
+        if (!key) {
+          showToast("请输入千问 API Key", "warning");
+          return;
+        }
+        if (saveApiKey(key)) {
+          updateApiKeyStatus();
+          showToast("API Key 已保存到本地浏览器", "success");
+        } else {
+          showToast("保存失败，localStorage 可能不可用", "error");
+        }
+      });
+
+      els.clearApiKeyBtn.addEventListener("click", () => {
+        els.apiKeyInput.value = "";
+        if (clearApiKey()) {
+          updateApiKeyStatus();
+          showToast("API Key 已清除", "success");
+        } else {
+          showToast("清除失败，localStorage 可能不可用", "error");
+        }
+      });
+
+      els.latexInput.addEventListener("input", renderPreview);
+      els.copyLatexBtn.addEventListener("click", () => copyText(els.latexInput.value, "LaTeX 已复制"));
+      els.copyAllPreviewBtn.addEventListener("click", () => copyText(els.latexInput.value, "全部 LaTeX 已复制"));
+      els.clearLatexBtn.addEventListener("click", () => {
+        els.latexInput.value = "";
+        els.latexInput.dispatchEvent(new Event("input"));
+        showToast("已清空", "info");
+      });
+      els.saveHistoryBtn.addEventListener("click", () => {
+        const value = els.latexInput.value.trim();
+        if (!value) {
+          showToast("没有可保存的公式", "warning");
+          return;
+        }
+        if (saveHistory(value)) {
+          renderHistory();
+          showToast("已保存到历史记录", "success");
+        } else {
+          showToast("保存失败，localStorage 可能不可用", "error");
+        }
+      });
+
+      els.dropZone.addEventListener("click", () => els.imageInput.click());
+      els.dropZone.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          els.imageInput.click();
+        }
+      });
+      els.imageInput.addEventListener("change", (event) => {
+        const file = event.target.files?.[0];
+        if (file) handleImageFile(file);
+      });
+
+      ["dragenter", "dragover"].forEach((name) => {
+        els.dropZone.addEventListener(name, (event) => {
+          event.preventDefault();
+          els.dropZone.classList.add("dragover");
+        });
+      });
+      ["dragleave", "drop"].forEach((name) => {
+        els.dropZone.addEventListener(name, (event) => {
+          event.preventDefault();
+          els.dropZone.classList.remove("dragover");
+        });
+      });
+      els.dropZone.addEventListener("drop", (event) => {
+        const file = event.dataTransfer?.files?.[0];
+        if (file) handleImageFile(file);
+      });
+
+      els.recognizeBtn.addEventListener("click", runRecognition);
+      els.copyRecognizedBtn.addEventListener("click", () => copyText(state.recognizedLatex, "识别结果已复制"));
+      els.removeImageBtn.addEventListener("click", removeImage);
+      els.clearHistoryBtn.addEventListener("click", () => {
+        if (clearHistory()) {
+          renderHistory();
+          showToast("历史记录已清空", "success");
+        } else {
+          showToast("清空失败，localStorage 可能不可用", "error");
+        }
+      });
+      els.exportWordBtn.addEventListener("click", exportDocx);
+    }
+
+    function init() {
+      if (!isLocalStorageAvailable()) {
+        showToast("当前浏览器可能不支持 localStorage，API Key 和历史记录无法持久保存", "warning", 5000);
+      }
+
+      const savedKey = getApiKey();
+      if (savedKey) els.apiKeyInput.value = savedKey;
+      updateApiKeyStatus();
+
+      els.latexInput.value = DEFAULT_FORMULA;
+      renderHistory();
+      renderPreview();
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      bindEvents();
+      init();
+    });
+  </script>
+</body>
+</html>
